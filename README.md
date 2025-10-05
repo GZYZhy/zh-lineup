@@ -76,15 +76,4 @@ aaa123.txt
 ## GitHub
 https://github.com/GZYZhy/zh-lineup
 
-`Result.list` 内容：
-```
-# 文件排序 for 文件夹 Folder
-# 使用配置 相似度阈值 0.6
-1-abc_123.mp3
-2-cde_123.ppt
-3-aaa123_.txt
-# 未匹配项目 (总共 1 个未匹配)
-# 12456.abc(第 4 行)
-# 文件夹中未使用的文件 (总共 1 个文件)
-# haha.aaa
-```
+(c) 2025 ZhangWeb @GZYZhy
