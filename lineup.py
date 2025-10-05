@@ -3,10 +3,14 @@ import sys
 import shutil
 import re
 import difflib
+import json
+from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog
+from tkinter import scrolledtext
 from tkinter import ttk
 import openpyxl
+import webbrowser
 
 class LineupApp:
     def __init__(self, root):
@@ -20,10 +24,22 @@ class LineupApp:
         
         self.folder_path = ""
         self.list_items = []
-        self.similarity_threshold = 0.6
+        self.similarity_threshold = 0.6  # 初始化相似度阈值
         self.auto_select_highest = tk.BooleanVar(value=False)
         self.generate_list_only = tk.BooleanVar(value=False)
         self.ignore_directories = tk.BooleanVar(value=False)
+        self.output_format = tk.StringVar(value="text")
+        self.filename_format = tk.StringVar(value="relative")
+        self.output_folder = ""
+        self.output_file = ""
+        
+        self.rename_mode = tk.StringVar(value="add_prefix")
+        self.separator = tk.StringVar(value="-")
+        self.format_str = tk.StringVar(value="[Num]")
+        self.start_num = tk.IntVar(value=1)
+        self.step = tk.IntVar(value=1)
+        self.reverse = tk.BooleanVar(value=False)
+        self.end_num = tk.IntVar(value=1)
         
         self.notebook = ttk.Notebook(root)
         self.notebook.pack(fill="both", expand=True, padx=10, pady=10)
@@ -112,7 +128,23 @@ class LineupApp:
         scrollbar.pack(side=tk.RIGHT, fill="y")
     
     def setup_config_frame(self):
-        config_group = ttk.LabelFrame(self.config_frame, text="匹配配置", style='Card.TFrame')
+        # 创建可滚动框架
+        canvas = tk.Canvas(self.config_frame)
+        scrollbar = ttk.Scrollbar(self.config_frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        config_group = ttk.LabelFrame(scrollable_frame, text="匹配配置", style='Card.TFrame')
         config_group.pack(fill="x", padx=20, pady=20)
         
         ttk.Label(config_group, text="相似度阈值 (0.0 - 1.0):").grid(row=0, column=0, padx=10, pady=10, sticky="w")
@@ -129,7 +161,58 @@ class LineupApp:
         
         ttk.Checkbutton(config_group, text="忽略目录（只处理文件）", variable=self.ignore_directories).grid(row=3, column=0, columnspan=3, padx=10, pady=10, sticky="w")
         
+        ttk.Label(config_group, text="输出格式:").grid(row=4, column=0, padx=10, pady=10, sticky="w")
+        ttk.Radiobutton(config_group, text="文本 (Result.txt)", variable=self.output_format, value="text").grid(row=5, column=0, sticky="w", padx=20, pady=5)
+        ttk.Radiobutton(config_group, text="JSON (Result.json)", variable=self.output_format, value="json").grid(row=6, column=0, sticky="w", padx=20, pady=5)
+        ttk.Radiobutton(config_group, text="M3U (Result.m3u)", variable=self.output_format, value="m3u").grid(row=7, column=0, sticky="w", padx=20, pady=5)
+        
+        ttk.Label(config_group, text="文件名格式:").grid(row=8, column=0, padx=10, pady=10, sticky="w")
+        ttk.Radiobutton(config_group, text="相对路径", variable=self.filename_format, value="relative").grid(row=9, column=0, sticky="w", padx=20, pady=5)
+        ttk.Radiobutton(config_group, text="绝对路径", variable=self.filename_format, value="absolute").grid(row=10, column=0, sticky="w", padx=20, pady=5)
+        
+        ttk.Label(config_group, text="结果输出文件夹:").grid(row=11, column=0, padx=10, pady=10, sticky="w")
+        self.output_folder_entry = ttk.Entry(config_group, width=30)
+        self.output_folder_entry.grid(row=11, column=1, padx=10, pady=10, sticky="ew")
+        ttk.Button(config_group, text="浏览", command=self.select_output_folder).grid(row=11, column=2, padx=10, pady=10)
+        
+        ttk.Label(config_group, text="输出列表文件路径:").grid(row=12, column=0, padx=10, pady=10, sticky="w")
+        self.output_file_entry = ttk.Entry(config_group, width=30)
+        self.output_file_entry.grid(row=12, column=1, padx=10, pady=10, sticky="ew")
+        ttk.Button(config_group, text="浏览", command=self.select_output_file).grid(row=12, column=2, padx=10, pady=10)
+        
         config_group.columnconfigure(1, weight=1)
+        
+        # 重命名策略
+        rename_group = ttk.LabelFrame(scrollable_frame, text="重命名策略", style='Card.TFrame')
+        rename_group.pack(fill="x", padx=20, pady=20)
+        
+        ttk.Label(rename_group, text="模式:").grid(row=0, column=0, padx=10, pady=10, sticky="w")
+        ttk.Radiobutton(rename_group, text="在文件名前加序号", variable=self.rename_mode, value="add_prefix").grid(row=1, column=0, sticky="w", padx=20, pady=5)
+        ttk.Radiobutton(rename_group, text="按格式重命名", variable=self.rename_mode, value="custom_format").grid(row=2, column=0, sticky="w", padx=20, pady=5)
+        
+        ttk.Label(rename_group, text="分隔符:").grid(row=3, column=0, padx=10, pady=10, sticky="w")
+        self.separator_entry = ttk.Entry(rename_group, textvariable=self.separator, width=10)
+        self.separator_entry.grid(row=3, column=1, padx=10, pady=10, sticky="w")
+        
+        ttk.Label(rename_group, text="格式 (使用[Num]作为序号占位符):").grid(row=4, column=0, padx=10, pady=10, sticky="w")
+        self.format_entry = ttk.Entry(rename_group, textvariable=self.format_str, width=20)
+        self.format_entry.grid(row=4, column=1, padx=10, pady=10, sticky="ew")
+        
+        ttk.Label(rename_group, text="序号起始数:").grid(row=5, column=0, padx=10, pady=10, sticky="w")
+        self.start_num_entry = ttk.Entry(rename_group, textvariable=self.start_num, width=10)
+        self.start_num_entry.grid(row=5, column=1, padx=10, pady=10, sticky="w")
+        
+        ttk.Label(rename_group, text="跨度:").grid(row=6, column=0, padx=10, pady=10, sticky="w")
+        self.step_entry = ttk.Entry(rename_group, textvariable=self.step, width=10)
+        self.step_entry.grid(row=6, column=1, padx=10, pady=10, sticky="w")
+        
+        ttk.Checkbutton(rename_group, text="倒序", variable=self.reverse).grid(row=7, column=0, padx=10, pady=10, sticky="w")
+        
+        ttk.Label(rename_group, text="末尾数 (倒序时):").grid(row=8, column=0, padx=10, pady=10, sticky="w")
+        self.end_num_entry = ttk.Entry(rename_group, textvariable=self.end_num, width=10)
+        self.end_num_entry.grid(row=8, column=1, padx=10, pady=10, sticky="w")
+        
+        rename_group.columnconfigure(1, weight=1)
     
     def setup_about_frame(self):
         about_group = ttk.LabelFrame(self.about_frame, text="关于文件排序工具", style='Card.TFrame')
@@ -157,7 +240,7 @@ GitHub: https://github.com/GZYZhy/zh-lineup
 - 预览和仅生成列表模式
 - 跨平台GUI界面
 
-许可证: MIT
+许可证: Apache License 2.0
 """
         text = tk.Text(about_group, wrap=tk.WORD, font=('Microsoft YaHei', 10), height=20)
         scrollbar = ttk.Scrollbar(about_group, orient=tk.VERTICAL, command=text.yview)
@@ -172,11 +255,52 @@ GitHub: https://github.com/GZYZhy/zh-lineup
         self.threshold_label.config(text=f"{self.threshold_var.get():.2f}")
         self.similarity_threshold = self.threshold_var.get()
     
+    def generate_new_name(self, num, item):
+        if self.rename_mode.get() == "add_prefix":
+            separator = self.separator.get()
+            return f"{num}{separator}{item}"
+        else:
+            format_str = self.format_str.get()
+            base = format_str.replace("[Num]", str(num))
+            # 过滤特殊字符
+            base = re.sub(r'[<>:"|?*\\/]', '', base)
+            # 保留扩展名
+            name, ext = os.path.splitext(item)
+            return base + ext
+    
     def select_folder(self):
         self.folder_path = filedialog.askdirectory()
         if self.folder_path:
             self.folder_entry.delete(0, tk.END)
             self.folder_entry.insert(0, self.folder_path)
+    
+    def select_output_folder(self):
+        self.output_folder = filedialog.askdirectory()
+        if self.output_folder:
+            self.output_folder_entry.delete(0, tk.END)
+            self.output_folder_entry.insert(0, self.output_folder)
+    
+    def select_output_file(self):
+        output_format = self.output_format.get()
+        if output_format == "text":
+            default_ext = ".txt"
+        elif output_format == "json":
+            default_ext = ".json"
+        elif output_format == "m3u":
+            default_ext = ".m3u"
+        else:
+            default_ext = ".txt"
+        
+        self.output_file = filedialog.asksaveasfilename(
+            defaultextension=default_ext,
+            filetypes=[
+                ("文本文件", "*.txt") if output_format == "text" else ("JSON文件", "*.json") if output_format == "json" else ("M3U文件", "*.m3u"),
+                ("所有文件", "*.*")
+            ]
+        )
+        if self.output_file:
+            self.output_file_entry.delete(0, tk.END)
+            self.output_file_entry.insert(0, self.output_file)
     
     def import_list(self):
         mode = self.list_mode.get()
@@ -274,6 +398,22 @@ GitHub: https://github.com/GZYZhy/zh-lineup
             messagebox.showerror("错误", str(e))
     
     def process_lineup(self, folder, lines, preview=False):
+        output_format = self.output_format.get()
+        filename_format = self.filename_format.get()
+        
+        if output_format == "text":
+            result_file = "Result.txt"
+        elif output_format == "json":
+            result_file = "Result.json"
+        elif output_format == "m3u":
+            result_file = "Result.m3u"
+        
+        def get_filename(item, base_dir):
+            if filename_format == "absolute":
+                return os.path.join(base_dir, item)
+            else:
+                return item
+        
         # 获取项目
         if self.ignore_directories.get():
             items = [f for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f))]
@@ -322,12 +462,23 @@ GitHub: https://github.com/GZYZhy/zh-lineup
         
         unused = items
         
+        # 计算序号
+        len_matched = len(matched)
+        if self.reverse.get():
+            end = self.end_num.get()
+            nums = [end - i * self.step.get() for i in range(len_matched)]
+        else:
+            start = self.start_num.get()
+            nums = [start + i * self.step.get() for i in range(len_matched)]
+        
         if preview:
             result = "预览结果:\n\n"
             result += "匹配的项目:\n"
             for idx, (orig_idx, item) in enumerate(matched, 1):
+                num = nums[idx-1]
+                new_name = self.generate_new_name(num, item)
                 item_type = "目录" if os.path.isdir(os.path.join(folder, item)) else "文件"
-                result += f"{idx}. {item} ({item_type})\n"
+                result += f"{idx}. {new_name} ({item_type})\n"
             result += "\n"
             if missed:
                 result += f"未匹配的项目 (总共 {len(missed)} 个):\n"
@@ -343,31 +494,92 @@ GitHub: https://github.com/GZYZhy/zh-lineup
         
         # 如果仅生成列表
         if self.generate_list_only.get():
-            result_dir = folder  # 不创建Result子目录
-            result_list_path = os.path.join(result_dir, 'Result.list')
-            with open(result_list_path, 'w', encoding='utf-8') as f:
-                f.write(f"# 文件排序 for 文件夹 {os.path.basename(folder)}\n")
-                f.write(f"# 使用配置 相似度阈值 {self.similarity_threshold} (仅生成列表)\n")
-                for idx, (orig_idx, item) in enumerate(matched, 1):
-                    f.write(f"{item}\n")
-                if missed:
-                    f.write(f"# 未匹配项目 (总共 {len(missed)} 个未匹配)\n")
-                    for orig_idx, item in missed:
-                        f.write(f"# {item}(第 {orig_idx} 行)\n")
-                if unused:
-                    f.write(f"# 文件夹中未使用的项目 (总共 {len(unused)} 个项目)\n")
-                    for u in unused:
-                        item_type = "目录" if os.path.isdir(os.path.join(folder, u)) else "文件"
-                        f.write(f"# {u} ({item_type})\n")
-            return f"列表生成完成！Result.list 保存在 {result_dir}\n"
+            if self.output_file_entry.get().strip():
+                result_list_path = self.output_file_entry.get().strip()
+                result_dir = os.path.dirname(result_list_path)
+            elif self.output_folder_entry.get().strip():
+                result_dir = self.output_folder_entry.get().strip()
+                result_list_path = os.path.join(result_dir, result_file)
+            else:
+                result_dir = folder
+                result_list_path = os.path.join(result_dir, result_file)
+        else:
+            if self.output_file_entry.get().strip():
+                result_list_path = self.output_file_entry.get().strip()
+                result_dir = os.path.dirname(result_list_path)
+            elif self.output_folder_entry.get().strip():
+                result_dir = self.output_folder_entry.get().strip()
+                result_list_path = os.path.join(result_dir, result_file)
+            else:
+                result_dir = os.path.join(folder, 'Result')
+                # 检查是否存在Result文件夹
+                if os.path.exists(result_dir):
+                    choice = messagebox.askyesno("确认", f"选择的文件夹中已存在 'Result' 文件夹。\n\n选择 '是' 以覆盖该文件夹，选择 '否' 将其当作排序项目并指定新的输出文件夹名称。")
+                    if not choice:
+                        # 要求输入新的输出文件夹名称
+                        new_name = simpledialog.askstring("输入新的输出文件夹名称", "请输入新的输出文件夹名称:")
+                        if new_name and new_name.strip():
+                            result_dir = os.path.join(folder, new_name.strip())
+                            result_list_path = os.path.join(result_dir, result_file)
+                        else:
+                            return "操作已取消。"
+                    else:
+                        result_list_path = os.path.join(result_dir, result_file)
+                else:
+                    result_list_path = os.path.join(result_dir, result_file)
         
-        # 创建Result目录
-        result_dir = os.path.join(folder, 'Result')
+        # 检查输出文件是否已存在
+        if os.path.exists(result_list_path):
+            choice = messagebox.askyesno("确认", f"输出文件 '{os.path.basename(result_list_path)}' 已存在。\n\n是否覆盖该文件？")
+            if not choice:
+                return "操作已取消。"
+        
+        if self.generate_list_only.get():
+            with open(result_list_path, 'w', encoding='utf-8') as f:
+                if output_format == "text":
+                    f.write(f"# 文件排序 for 文件夹 {os.path.basename(folder)}\n")
+                    f.write(f"# 使用配置 相似度阈值 {self.similarity_threshold} (仅生成列表)\n")
+                    for idx, (orig_idx, item) in enumerate(matched, 1):
+                        f.write(f"{get_filename(item, folder)}\n")
+                    if missed:
+                        f.write(f"# 未匹配项目 (总共 {len(missed)} 个未匹配)\n")
+                        for orig_idx, item in missed:
+                            f.write(f"# {item}(第 {orig_idx} 行)\n")
+                    if unused:
+                        f.write(f"# 文件夹中未使用的项目 (总共 {len(unused)} 个项目)\n")
+                        for u in unused:
+                            item_type = "目录" if os.path.isdir(os.path.join(folder, u)) else "文件"
+                            f.write(f"# {get_filename(u, folder)} ({item_type})\n")
+                elif output_format == "json":
+                    data = {
+                        "folder": os.path.basename(folder),
+                        "threshold": self.similarity_threshold,
+                        "mode": "list_only",
+                        "matched": [get_filename(item, folder) for _, item in matched],
+                        "missed": [{"line": orig_idx, "item": item} for orig_idx, item in missed],
+                        "unused": [{"item": get_filename(u, folder), "type": "目录" if os.path.isdir(os.path.join(folder, u)) else "文件"} for u in unused]
+                    }
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+                elif output_format == "m3u":
+                    f.write("#EXTM3U\n")
+                    for idx, (orig_idx, item) in enumerate(matched, 1):
+                        f.write(f"#EXTINF:-1,{item}\n")
+                        f.write(f"{get_filename(item, folder)}\n")
+            return f"列表生成完成！{os.path.basename(result_list_path)} 保存在 {result_dir}\n"
+        
+        # 确保输出目录存在
         os.makedirs(result_dir, exist_ok=True)
+        
+        # 计算新名称
+        new_names = []
+        for idx, (orig_idx, item) in enumerate(matched, 1):
+            num = nums[idx-1]
+            new_name = self.generate_new_name(num, item)
+            new_names.append(new_name)
         
         # 复制或创建项目
         for idx, (orig_idx, item) in enumerate(matched, 1):
-            new_name = f"{idx}-{item}"
+            new_name = new_names[idx-1]
             src_path = os.path.join(folder, item)
             dst_path = os.path.join(result_dir, new_name)
             if os.path.isfile(src_path):
@@ -376,22 +588,38 @@ GitHub: https://github.com/GZYZhy/zh-lineup
                 shutil.copytree(src_path, dst_path)
         
         # 生成Result.list
-        result_list_path = os.path.join(result_dir, 'Result.list')
         with open(result_list_path, 'w', encoding='utf-8') as f:
-            f.write(f"# 文件排序 for 文件夹 {os.path.basename(folder)}\n")
-            f.write(f"# 使用配置 相似度阈值 {self.similarity_threshold}\n")
-            for idx, (orig_idx, item) in enumerate(matched, 1):
-                item_type = "目录" if os.path.isdir(os.path.join(folder, item)) else "文件"
-                f.write(f"{idx}-{item} ({item_type})\n")
-            if missed:
-                f.write(f"# 未匹配项目 (总共 {len(missed)} 个未匹配)\n")
-                for orig_idx, item in missed:
-                    f.write(f"# {item}(第 {orig_idx} 行)\n")
-            if unused:
-                f.write(f"# 文件夹中未使用的项目 (总共 {len(unused)} 个项目)\n")
-                for u in unused:
-                    item_type = "目录" if os.path.isdir(os.path.join(folder, u)) else "文件"
-                    f.write(f"# {u} ({item_type})\n")
+            if output_format == "text":
+                f.write(f"# 文件排序 for 文件夹 {os.path.basename(folder)}\n")
+                f.write(f"# 使用配置 相似度阈值 {self.similarity_threshold}\n")
+                for new_name in new_names:
+                    item_type = "目录" if os.path.isdir(os.path.join(result_dir, new_name)) else "文件"
+                    f.write(f"{get_filename(new_name, result_dir)} ({item_type})\n")
+                if missed:
+                    f.write(f"# 未匹配项目 (总共 {len(missed)} 个未匹配)\n")
+                    for orig_idx, item in missed:
+                        f.write(f"# {item}(第 {orig_idx} 行)\n")
+                if unused:
+                    f.write(f"# 文件夹中未使用的项目 (总共 {len(unused)} 个项目)\n")
+                    for u in unused:
+                        item_type = "目录" if os.path.isdir(os.path.join(folder, u)) else "文件"
+                        f.write(f"# {get_filename(u, folder)} ({item_type})\n")
+            elif output_format == "json":
+                data = {
+                    "folder": os.path.basename(folder),
+                    "threshold": self.similarity_threshold,
+                    "mode": "full",
+                    "matched": [get_filename(new_name, result_dir) for new_name in new_names],
+                    "missed": [{"line": orig_idx, "item": item} for orig_idx, item in missed],
+                    "unused": [{"item": get_filename(u, folder), "type": "目录" if os.path.isdir(os.path.join(folder, u)) else "文件"} for u in unused]
+                }
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            elif output_format == "m3u":
+                f.write("#EXTM3U\n")
+                for idx, (orig_idx, item) in enumerate(matched, 1):
+                    new_name = new_names[idx-1]
+                    f.write(f"#EXTINF:-1,{item}\n")
+                    f.write(f"{get_filename(new_name, result_dir)}\n")
         
         return f"处理完成！结果保存在 {result_dir}\n"
     
