@@ -15,9 +15,15 @@ import webbrowser
 class LineupApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("文件排序工具")
-        self.root.geometry("700x600")
+        self.root.title("文件排序器")
+        self.root.geometry("800x700")
         self.root.resizable(True, True)
+        
+        # 设置图标
+        try:
+            self.root.iconbitmap("favicon.ico")
+        except tk.TclError:
+            pass  # 如果图标文件不存在，忽略
         
         # 设置样式
         self.setup_styles()
@@ -67,159 +73,182 @@ class LineupApp:
         except tk.TclError:
             pass  # 如果不可用，使用默认
         
-        # 定义自定义样式
-        style.configure('Card.TFrame', background='#f0f0f0', relief='raised', borderwidth=2)
-        style.configure('TLabel', font=('Microsoft YaHei', 10), background='#f0f0f0')
-        style.configure('TButton', font=('Microsoft YaHei', 10), padding=5)
-        style.configure('TRadiobutton', font=('Microsoft YaHei', 10), background='#f0f0f0')
-        style.configure('TEntry', font=('Microsoft YaHei', 10))
-        style.configure('TText', font=('Microsoft YaHei', 10))
-        style.configure('TScale', background='#f0f0f0')
-        style.configure('TListbox', font=('Microsoft YaHei', 10))
+        # 定义自定义样式 - 更现代的设计
+        style.configure('Card.TFrame', background='#ffffff', relief='flat', borderwidth=1)
+        style.configure('TLabel', font=('Microsoft YaHei', 11), background='#ffffff', foreground='#333333')
+        style.configure('TButton', font=('Microsoft YaHei', 10, 'bold'), padding=8, relief='flat', background='#0078d4', foreground='white')
+        style.map('TButton', background=[('active', '#106ebe')])
+        style.configure('Accent.TButton', font=('Microsoft YaHei', 11, 'bold'), padding=10, relief='flat', background='#005a9e', foreground='white')
+        style.map('Accent.TButton', background=[('active', '#004578')])
+        style.configure('TRadiobutton', font=('Microsoft YaHei', 10), background='#ffffff', foreground='#333333')
+        style.configure('TEntry', font=('Microsoft YaHei', 10), relief='flat', borderwidth=1)
+        style.configure('TText', font=('Microsoft YaHei', 10), relief='flat', borderwidth=1)
+        style.configure('TScale', background='#ffffff')
+        style.configure('TListbox', font=('Microsoft YaHei', 10), relief='flat', borderwidth=1)
+        style.configure('TCheckbutton', font=('Microsoft YaHei', 10), background='#ffffff', foreground='#333333')
         
         # 设置根窗口背景
-        self.root.configure(bg='#e0e0e0')
+        self.root.configure(bg='#f5f5f5')
     
     def setup_main_frame(self):
-        # 文件夹选择组
-        folder_group = ttk.LabelFrame(self.main_frame, text="文件夹选择", style='Card.TFrame')
-        folder_group.pack(fill="x", padx=10, pady=10)
+        # 主容器
+        main_container = ttk.Frame(self.main_frame, style='Card.TFrame')
+        main_container.pack(fill="both", expand=True, padx=20, pady=20)
         
-        ttk.Label(folder_group, text="选择文件夹:").grid(row=0, column=0, padx=10, pady=10, sticky="w")
-        self.folder_entry = ttk.Entry(folder_group, width=50)
-        self.folder_entry.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
-        ttk.Button(folder_group, text="浏览", command=self.select_folder).grid(row=0, column=2, padx=10, pady=10)
+        # 文件夹选择区域
+        folder_frame = ttk.LabelFrame(main_container, text="📁 选择源文件夹", style='Card.TFrame', padding=10)
+        folder_frame.pack(fill="x", pady=(0, 15))
         
-        folder_group.columnconfigure(1, weight=1)
+        folder_inner = ttk.Frame(folder_frame, style='Card.TFrame')
+        folder_inner.pack(fill="x")
+        ttk.Label(folder_inner, text="源文件夹:").pack(side=tk.LEFT, padx=(0, 10))
+        self.folder_entry = ttk.Entry(folder_inner, width=50)
+        self.folder_entry.pack(side=tk.LEFT, fill="x", expand=True, padx=(0, 10))
+        ttk.Button(folder_inner, text="浏览", command=self.select_folder).pack(side=tk.RIGHT)
         
-        # 列表输入组
-        list_group = ttk.LabelFrame(self.main_frame, text="目的列表输入", style='Card.TFrame')
-        list_group.pack(fill="x", padx=10, pady=10)
+        # 列表输入区域
+        list_frame = ttk.LabelFrame(main_container, text="📋 目的列表输入", style='Card.TFrame', padding=10)
+        list_frame.pack(fill="x", pady=(0, 15))
+        
+        # 输入方式选择
+        input_mode_frame = ttk.Frame(list_frame, style='Card.TFrame')
+        input_mode_frame.pack(fill="x", pady=(0, 10))
         
         self.list_mode = tk.StringVar(value="file")
-        ttk.Radiobutton(list_group, text="导入列表文件", variable=self.list_mode, value="file").grid(row=0, column=0, sticky="w", padx=10, pady=5)
-        ttk.Radiobutton(list_group, text="导入Excel文件", variable=self.list_mode, value="excel").grid(row=1, column=0, sticky="w", padx=10, pady=5)
-        ttk.Radiobutton(list_group, text="手动输入", variable=self.list_mode, value="manual").grid(row=2, column=0, sticky="w", padx=10, pady=5)
+        ttk.Radiobutton(input_mode_frame, text="导入文件", variable=self.list_mode, value="file").pack(side=tk.LEFT, padx=(0, 20))
+        ttk.Radiobutton(input_mode_frame, text="导入Excel", variable=self.list_mode, value="excel").pack(side=tk.LEFT, padx=(0, 20))
+        ttk.Radiobutton(input_mode_frame, text="手动输入", variable=self.list_mode, value="manual").pack(side=tk.LEFT)
         
-        self.import_button = ttk.Button(list_group, text="导入", command=self.import_list)
-        self.import_button.grid(row=0, column=1, rowspan=3, padx=10, pady=10, sticky="ns")
+        ttk.Button(input_mode_frame, text="导入", command=self.import_list).pack(side=tk.RIGHT)
         
         # 手动输入文本框
-        self.manual_text = tk.Text(list_group, height=6, width=60, font=('Microsoft YaHei', 10), wrap=tk.WORD)
-        self.manual_text.grid(row=3, column=0, columnspan=2, padx=10, pady=10, sticky="ew")
+        self.manual_text = tk.Text(list_frame, height=8, width=60, font=('Microsoft YaHei', 10), wrap=tk.WORD, relief='flat', borderwidth=1)
+        self.manual_text.pack(fill="x", pady=(10, 0))
         
-        list_group.columnconfigure(0, weight=1)
+        # 快速设置区域
+        quick_frame = ttk.LabelFrame(main_container, text="⚡ 快速设置", style='Card.TFrame', padding=10)
+        quick_frame.pack(fill="x", pady=(0, 15))
         
-        # 按钮组
-        button_group = ttk.Frame(self.main_frame, style='Card.TFrame')
-        button_group.pack(fill="x", padx=10, pady=10)
+        # 相似度阈值
+        threshold_frame = ttk.Frame(quick_frame, style='Card.TFrame')
+        threshold_frame.pack(fill="x", pady=(0, 10))
+        ttk.Label(threshold_frame, text="相似度阈值:").pack(side=tk.LEFT, padx=(0, 10))
+        self.threshold_var = tk.DoubleVar(value=0.6)
+        self.threshold_scale = ttk.Scale(threshold_frame, from_=0.0, to=1.0, variable=self.threshold_var, orient="horizontal", length=200)
+        self.threshold_scale.pack(side=tk.LEFT, padx=(0, 10))
+        self.threshold_label = ttk.Label(threshold_frame, text="0.60", font=('Microsoft YaHei', 12, 'bold'))
+        self.threshold_label.pack(side=tk.LEFT)
+        self.threshold_var.trace("w", self.update_threshold_label)
         
-        ttk.Button(button_group, text="预览", command=self.preview, style='Accent.TButton').pack(side=tk.LEFT, padx=20, pady=10)
-        ttk.Button(button_group, text="运行", command=self.run_lineup, style='Accent.TButton').pack(side=tk.LEFT, padx=20, pady=10)
+        # 选项
+        options_frame = ttk.Frame(quick_frame, style='Card.TFrame')
+        options_frame.pack(fill="x")
+        self.auto_select_highest = tk.BooleanVar(value=False)
+        ttk.Checkbutton(options_frame, text="自动选择最高相似度", variable=self.auto_select_highest).pack(side=tk.LEFT, padx=(0, 20))
+        self.generate_list_only = tk.BooleanVar(value=False)
+        ttk.Checkbutton(options_frame, text="仅生成列表", variable=self.generate_list_only).pack(side=tk.LEFT)
         
-        # 结果显示组
-        result_group = ttk.LabelFrame(self.main_frame, text="结果", style='Card.TFrame')
-        result_group.pack(fill="both", expand=True, padx=10, pady=10)
+        # 操作按钮
+        button_frame = ttk.Frame(main_container, style='Card.TFrame')
+        button_frame.pack(fill="x", pady=(0, 15))
+        ttk.Button(button_frame, text="🔍 预览", command=self.preview, style='Accent.TButton').pack(side=tk.LEFT, padx=(0, 20))
+        ttk.Button(button_frame, text="▶️ 运行", command=self.run_lineup, style='Accent.TButton').pack(side=tk.LEFT)
         
-        self.result_text = tk.Text(result_group, height=12, width=80, font=('Microsoft YaHei', 10), wrap=tk.WORD)
-        scrollbar = ttk.Scrollbar(result_group, orient=tk.VERTICAL, command=self.result_text.yview)
+        # 结果显示区域
+        result_frame = ttk.LabelFrame(main_container, text="📊 结果", style='Card.TFrame', padding=10)
+        result_frame.pack(fill="both", expand=True)
+        
+        self.result_text = tk.Text(result_frame, height=12, width=80, font=('Microsoft YaHei', 10), wrap=tk.WORD, relief='flat', borderwidth=1)
+        scrollbar = ttk.Scrollbar(result_frame, orient=tk.VERTICAL, command=self.result_text.yview)
         self.result_text.configure(yscrollcommand=scrollbar.set)
-        self.result_text.pack(side=tk.LEFT, fill="both", expand=True, padx=10, pady=10)
+        self.result_text.pack(side=tk.LEFT, fill="both", expand=True)
         scrollbar.pack(side=tk.RIGHT, fill="y")
     
     def setup_config_frame(self):
-        # 创建可滚动框架
-        canvas = tk.Canvas(self.config_frame)
-        scrollbar = ttk.Scrollbar(self.config_frame, orient="vertical", command=canvas.yview)
-        scrollable_frame = ttk.Frame(canvas)
+        # 主容器
+        config_container = ttk.Frame(self.config_frame, style='Card.TFrame')
+        config_container.pack(fill="both", expand=True, padx=20, pady=20)
         
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
+        # 输出设置
+        output_frame = ttk.LabelFrame(config_container, text="📤 输出设置", style='Card.TFrame', padding=10)
+        output_frame.pack(fill="x", pady=(0, 15))
         
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
+        # 输出格式
+        format_frame = ttk.Frame(output_frame, style='Card.TFrame')
+        format_frame.pack(fill="x", pady=(0, 10))
+        ttk.Label(format_frame, text="输出格式:").pack(side=tk.LEFT, padx=(0, 10))
+        self.output_format = tk.StringVar(value="text")
+        ttk.Radiobutton(format_frame, text="文本", variable=self.output_format, value="text").pack(side=tk.LEFT, padx=(0, 15))
+        ttk.Radiobutton(format_frame, text="JSON", variable=self.output_format, value="json").pack(side=tk.LEFT, padx=(0, 15))
+        ttk.Radiobutton(format_frame, text="M3U", variable=self.output_format, value="m3u").pack(side=tk.LEFT)
         
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        # 文件名格式
+        filename_frame = ttk.Frame(output_frame, style='Card.TFrame')
+        filename_frame.pack(fill="x", pady=(0, 10))
+        ttk.Label(filename_frame, text="文件名格式:").pack(side=tk.LEFT, padx=(0, 10))
+        self.filename_format = tk.StringVar(value="relative")
+        ttk.Radiobutton(filename_frame, text="相对路径", variable=self.filename_format, value="relative").pack(side=tk.LEFT, padx=(0, 15))
+        ttk.Radiobutton(filename_frame, text="绝对路径", variable=self.filename_format, value="absolute").pack(side=tk.LEFT)
         
-        config_group = ttk.LabelFrame(scrollable_frame, text="匹配配置", style='Card.TFrame')
-        config_group.pack(fill="x", padx=20, pady=20)
+        # 输出位置
+        location_frame = ttk.Frame(output_frame, style='Card.TFrame')
+        location_frame.pack(fill="x")
+        ttk.Label(location_frame, text="输出文件夹:").pack(side=tk.LEFT, padx=(0, 10))
+        self.output_folder_entry = ttk.Entry(location_frame, width=30)
+        self.output_folder_entry.pack(side=tk.LEFT, fill="x", expand=True, padx=(0, 10))
+        ttk.Button(location_frame, text="浏览", command=self.select_output_folder).pack(side=tk.RIGHT)
         
-        ttk.Label(config_group, text="相似度阈值 (0.0 - 1.0):").grid(row=0, column=0, padx=10, pady=10, sticky="w")
-        self.threshold_var = tk.DoubleVar(value=0.6)
-        self.threshold_scale = ttk.Scale(config_group, from_=0.0, to=1.0, variable=self.threshold_var, orient="horizontal", length=300)
-        self.threshold_scale.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
-        self.threshold_label = ttk.Label(config_group, text="0.60", font=('Microsoft YaHei', 12, 'bold'))
-        self.threshold_label.grid(row=0, column=2, padx=10, pady=10)
-        self.threshold_var.trace("w", self.update_threshold_label)
+        # 重命名设置
+        rename_frame = ttk.LabelFrame(config_container, text="🏷️ 重命名设置", style='Card.TFrame', padding=10)
+        rename_frame.pack(fill="x", pady=(0, 15))
         
-        ttk.Checkbutton(config_group, text="自动选择最高相似度（当有多个候选时）", variable=self.auto_select_highest).grid(row=1, column=0, columnspan=3, padx=10, pady=10, sticky="w")
+        # 模式选择
+        mode_frame = ttk.Frame(rename_frame, style='Card.TFrame')
+        mode_frame.pack(fill="x", pady=(0, 10))
+        ttk.Label(mode_frame, text="重命名模式:").pack(side=tk.LEFT, padx=(0, 10))
+        self.rename_mode = tk.StringVar(value="add_prefix")
+        ttk.Radiobutton(mode_frame, text="添加前缀", variable=self.rename_mode, value="add_prefix").pack(side=tk.LEFT, padx=(0, 15))
+        ttk.Radiobutton(mode_frame, text="自定义格式", variable=self.rename_mode, value="custom_format").pack(side=tk.LEFT)
         
-        ttk.Checkbutton(config_group, text="仅生成列表（不复制文件）", variable=self.generate_list_only).grid(row=2, column=0, columnspan=3, padx=10, pady=10, sticky="w")
+        # 参数设置
+        params_frame = ttk.Frame(rename_frame, style='Card.TFrame')
+        params_frame.pack(fill="x")
         
-        ttk.Checkbutton(config_group, text="忽略目录（只处理文件）", variable=self.ignore_directories).grid(row=3, column=0, columnspan=3, padx=10, pady=10, sticky="w")
+        # 第一行
+        row1 = ttk.Frame(params_frame, style='Card.TFrame')
+        row1.pack(fill="x", pady=(0, 5))
+        ttk.Label(row1, text="分隔符:").pack(side=tk.LEFT, padx=(0, 5))
+        self.separator = tk.StringVar(value="-")
+        ttk.Entry(row1, textvariable=self.separator, width=5).pack(side=tk.LEFT, padx=(0, 15))
+        ttk.Label(row1, text="起始序号:").pack(side=tk.LEFT, padx=(0, 5))
+        self.start_num = tk.IntVar(value=1)
+        ttk.Entry(row1, textvariable=self.start_num, width=5).pack(side=tk.LEFT, padx=(0, 15))
+        ttk.Label(row1, text="跨度:").pack(side=tk.LEFT, padx=(0, 5))
+        self.step = tk.IntVar(value=1)
+        ttk.Entry(row1, textvariable=self.step, width=5).pack(side=tk.LEFT)
         
-        ttk.Label(config_group, text="输出格式:").grid(row=4, column=0, padx=10, pady=10, sticky="w")
-        ttk.Radiobutton(config_group, text="文本 (Result.txt)", variable=self.output_format, value="text").grid(row=5, column=0, sticky="w", padx=20, pady=5)
-        ttk.Radiobutton(config_group, text="JSON (Result.json)", variable=self.output_format, value="json").grid(row=6, column=0, sticky="w", padx=20, pady=5)
-        ttk.Radiobutton(config_group, text="M3U (Result.m3u)", variable=self.output_format, value="m3u").grid(row=7, column=0, sticky="w", padx=20, pady=5)
+        # 第二行
+        row2 = ttk.Frame(params_frame, style='Card.TFrame')
+        row2.pack(fill="x", pady=(0, 5))
+        ttk.Label(row2, text="格式 (使用[Num]):").pack(side=tk.LEFT, padx=(0, 5))
+        self.format_str = tk.StringVar(value="[Num]")
+        ttk.Entry(row2, textvariable=self.format_str, width=15).pack(side=tk.LEFT, padx=(0, 15))
+        self.reverse = tk.BooleanVar(value=False)
+        ttk.Checkbutton(row2, text="倒序", variable=self.reverse).pack(side=tk.LEFT)
         
-        ttk.Label(config_group, text="文件名格式:").grid(row=8, column=0, padx=10, pady=10, sticky="w")
-        ttk.Radiobutton(config_group, text="相对路径", variable=self.filename_format, value="relative").grid(row=9, column=0, sticky="w", padx=20, pady=5)
-        ttk.Radiobutton(config_group, text="绝对路径", variable=self.filename_format, value="absolute").grid(row=10, column=0, sticky="w", padx=20, pady=5)
+        # 其他选项
+        other_frame = ttk.LabelFrame(config_container, text="🔧 其他选项", style='Card.TFrame', padding=10)
+        other_frame.pack(fill="x")
         
-        ttk.Label(config_group, text="结果输出文件夹:").grid(row=11, column=0, padx=10, pady=10, sticky="w")
-        self.output_folder_entry = ttk.Entry(config_group, width=30)
-        self.output_folder_entry.grid(row=11, column=1, padx=10, pady=10, sticky="ew")
-        ttk.Button(config_group, text="浏览", command=self.select_output_folder).grid(row=11, column=2, padx=10, pady=10)
-        
-        ttk.Label(config_group, text="输出列表文件路径:").grid(row=12, column=0, padx=10, pady=10, sticky="w")
-        self.output_file_entry = ttk.Entry(config_group, width=30)
-        self.output_file_entry.grid(row=12, column=1, padx=10, pady=10, sticky="ew")
-        ttk.Button(config_group, text="浏览", command=self.select_output_file).grid(row=12, column=2, padx=10, pady=10)
-        
-        config_group.columnconfigure(1, weight=1)
-        
-        # 重命名策略
-        rename_group = ttk.LabelFrame(scrollable_frame, text="重命名策略", style='Card.TFrame')
-        rename_group.pack(fill="x", padx=20, pady=20)
-        
-        ttk.Label(rename_group, text="模式:").grid(row=0, column=0, padx=10, pady=10, sticky="w")
-        ttk.Radiobutton(rename_group, text="在文件名前加序号", variable=self.rename_mode, value="add_prefix").grid(row=1, column=0, sticky="w", padx=20, pady=5)
-        ttk.Radiobutton(rename_group, text="按格式重命名", variable=self.rename_mode, value="custom_format").grid(row=2, column=0, sticky="w", padx=20, pady=5)
-        
-        ttk.Label(rename_group, text="分隔符:").grid(row=3, column=0, padx=10, pady=10, sticky="w")
-        self.separator_entry = ttk.Entry(rename_group, textvariable=self.separator, width=10)
-        self.separator_entry.grid(row=3, column=1, padx=10, pady=10, sticky="w")
-        
-        ttk.Label(rename_group, text="格式 (使用[Num]作为序号占位符):").grid(row=4, column=0, padx=10, pady=10, sticky="w")
-        self.format_entry = ttk.Entry(rename_group, textvariable=self.format_str, width=20)
-        self.format_entry.grid(row=4, column=1, padx=10, pady=10, sticky="ew")
-        
-        ttk.Label(rename_group, text="序号起始数:").grid(row=5, column=0, padx=10, pady=10, sticky="w")
-        self.start_num_entry = ttk.Entry(rename_group, textvariable=self.start_num, width=10)
-        self.start_num_entry.grid(row=5, column=1, padx=10, pady=10, sticky="w")
-        
-        ttk.Label(rename_group, text="跨度:").grid(row=6, column=0, padx=10, pady=10, sticky="w")
-        self.step_entry = ttk.Entry(rename_group, textvariable=self.step, width=10)
-        self.step_entry.grid(row=6, column=1, padx=10, pady=10, sticky="w")
-        
-        ttk.Checkbutton(rename_group, text="倒序", variable=self.reverse).grid(row=7, column=0, padx=10, pady=10, sticky="w")
-        
-        ttk.Label(rename_group, text="末尾数 (倒序时):").grid(row=8, column=0, padx=10, pady=10, sticky="w")
-        self.end_num_entry = ttk.Entry(rename_group, textvariable=self.end_num, width=10)
-        self.end_num_entry.grid(row=8, column=1, padx=10, pady=10, sticky="w")
-        
-        rename_group.columnconfigure(1, weight=1)
+        self.ignore_directories = tk.BooleanVar(value=False)
+        ttk.Checkbutton(other_frame, text="忽略目录（只处理文件）", variable=self.ignore_directories).pack(anchor="w")
     
     def setup_about_frame(self):
-        about_group = ttk.LabelFrame(self.about_frame, text="关于文件排序工具", style='Card.TFrame')
+        about_group = ttk.LabelFrame(self.about_frame, text="关于文件排序器", style='Card.TFrame', padding=10)
         about_group.pack(fill="both", expand=True, padx=20, pady=20)
         
         about_text = """
-文件排序工具 (zh-lineup)
+文件排序器 (zh-lineup)
 
 版本: 1.0
 作者: GZYZhy
@@ -227,10 +256,10 @@ class LineupApp:
 GitHub: https://github.com/GZYZhy/zh-lineup
 
 使用教程:
-1. 选择包含文件/目录的文件夹。
+1. 选择包含文件/目录的源文件夹。
 2. 选择目的列表输入方式：导入文件、Excel或手动输入。
 3. 点击"预览"查看结果，或"运行"执行排序。
-4. 在"配置"选项卡中调整匹配参数。
+4. 在"配置"选项卡中调整高级设置。
 
 功能:
 - 模糊匹配文件和目录
@@ -242,10 +271,10 @@ GitHub: https://github.com/GZYZhy/zh-lineup
 
 许可证: Apache License 2.0
 """
-        text = tk.Text(about_group, wrap=tk.WORD, font=('Microsoft YaHei', 10), height=20)
+        text = tk.Text(about_group, wrap=tk.WORD, font=('Microsoft YaHei', 10), height=20, relief='flat', borderwidth=1)
         scrollbar = ttk.Scrollbar(about_group, orient=tk.VERTICAL, command=text.yview)
         text.configure(yscrollcommand=scrollbar.set)
-        text.pack(side=tk.LEFT, fill="both", expand=True, padx=10, pady=10)
+        text.pack(side=tk.LEFT, fill="both", expand=True)
         scrollbar.pack(side=tk.RIGHT, fill="y")
         
         text.insert(tk.END, about_text.strip())
@@ -299,8 +328,7 @@ GitHub: https://github.com/GZYZhy/zh-lineup
             ]
         )
         if self.output_file:
-            self.output_file_entry.delete(0, tk.END)
-            self.output_file_entry.insert(0, self.output_file)
+            self.output_folder = os.path.dirname(self.output_file)
     
     def import_list(self):
         mode = self.list_mode.get()
@@ -494,20 +522,14 @@ GitHub: https://github.com/GZYZhy/zh-lineup
         
         # 如果仅生成列表
         if self.generate_list_only.get():
-            if self.output_file_entry.get().strip():
-                result_list_path = self.output_file_entry.get().strip()
-                result_dir = os.path.dirname(result_list_path)
-            elif self.output_folder_entry.get().strip():
+            if self.output_folder_entry.get().strip():
                 result_dir = self.output_folder_entry.get().strip()
                 result_list_path = os.path.join(result_dir, result_file)
             else:
                 result_dir = folder
                 result_list_path = os.path.join(result_dir, result_file)
         else:
-            if self.output_file_entry.get().strip():
-                result_list_path = self.output_file_entry.get().strip()
-                result_dir = os.path.dirname(result_list_path)
-            elif self.output_folder_entry.get().strip():
+            if self.output_folder_entry.get().strip():
                 result_dir = self.output_folder_entry.get().strip()
                 result_list_path = os.path.join(result_dir, result_file)
             else:
@@ -663,7 +685,7 @@ GitHub: https://github.com/GZYZhy/zh-lineup
     
     def show_about(self):
         about_text = """
-文件排序工具 (zh-lineup)
+文件排序器 (zh-lineup)
 
 版本: 1.0
 作者: GZYZhy
